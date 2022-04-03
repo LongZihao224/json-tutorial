@@ -20,29 +20,30 @@ static void lept_parse_whitespace(lept_context* c) {
 }
 
 static int lept_parse_number(lept_context* c, lept_value* v) {
-     char* end;
-    /* \TODO validate number */
-    const char* ptr = c->json;
-    if (*ptr == '+' || *ptr == '.')
-        return LEPT_PARSE_INVALID_VALUE;
-    if (*ptr == '-')ptr++;
-    for (; *ptr != '\0' && *ptr != ' ' && *ptr != 'e'&& *ptr != 'E'; ptr++) {
-        if (!ISDIGIT(*ptr) && *ptr != 'E' && *ptr != 'e' && *ptr != '.' && *ptr != '+' && *ptr != '-')
-            return LEPT_PARSE_INVALID_VALUE;
-        if (*(ptr + 1) == '\0' && *ptr == '.')
-            return LEPT_PARSE_INVALID_VALUE;
-        if (*ptr == '0' && *(ptr + 1) != 'E' && *(ptr + 1) != 'e' && *(ptr + 1) != '\0' && *(ptr + 1) != '.')return LEPT_PARSE_ROOT_NOT_SINGULAR;
+    const char* p = c->json;
+    if (*p == '-') p++;
+    if (*p == '0') p++;
+    else {
+        if (!ISDIGIT1TO9(*p)) return LEPT_PARSE_INVALID_VALUE;
+        for (p++; ISDIGIT(*p); p++);
     }
-    for (; *ptr != '\0' && *ptr != ' '; ptr++) {
-        if (!ISDIGIT(*ptr) && *ptr != 'E' && *ptr != 'e' && *ptr != '.' && *ptr != '+' && *ptr != '-')
-            return LEPT_PARSE_INVALID_VALUE;
+    if (*p == '.') {
+        p++;
+        if (!ISDIGIT(*p)) return LEPT_PARSE_INVALID_VALUE;
+        for (p++; ISDIGIT(*p); p++);
     }
-    v->n = strtod(c->json, &end);
-    if (!isfinite(v->n))return LEPT_PARSE_NUMBER_TOO_BIG;
-    if (c->json == end)
-        return LEPT_PARSE_INVALID_VALUE;
-    c->json = end;
+    if (*p == 'e' || *p == 'E') {
+        p++;
+        if (*p == '+' || *p == '-') p++;
+        if (!ISDIGIT(*p)) return LEPT_PARSE_INVALID_VALUE;
+        for (p++; ISDIGIT(*p); p++);
+    }
+    errno = 0;
+    v->n = strtod(c->json, NULL);
+    if (errno == ERANGE && (v->n == HUGE_VAL || v->n == -HUGE_VAL))
+        return LEPT_PARSE_NUMBER_TOO_BIG;
     v->type = LEPT_NUMBER;
+    c->json = p;
     return LEPT_PARSE_OK;
 }
 
