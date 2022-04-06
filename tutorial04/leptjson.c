@@ -92,11 +92,50 @@ static int lept_parse_number(lept_context* c, lept_value* v) {
 
 static const char* lept_parse_hex4(const char* p, unsigned* u) {
     /* \TODO */
+    unsigned sum = 0;
+    for (int i = 0; i < 4; i++) {
+        if (*p >= 'a' && *p <= 'f') {
+            sum = sum * 16 + (*p - 'a') + 10;
+        }
+        else if (*p >= 'A' && *p <= 'F') {
+            sum = sum * 16 + (*p - 'A') + 10;
+        }
+        else if (*p >= '0' && *p <= '9') {
+            sum = sum * 16 + (*p - '0');
+        }
+        else {
+            return NULL;
+        }
+        p++;
+    }
+    *u = sum;
     return p;
+}
+
+static void OutputByte(unsigned u,lept_context* c) {
+    PUTC(c, '\x0' + u);
 }
 
 static void lept_encode_utf8(lept_context* c, unsigned u) {
     /* \TODO */
+    if (u >= 0x0000 && u <= 0x007F) {
+        OutputByte(u, c); 
+    }
+    else if (u >= 0x0080 && u <= 0x07FF) {
+        OutputByte(0xC0 | ((u >> 6) & 0xFF), c); /* 0xC0 = 11000000 */
+        OutputByte(0x80 | (u & 0x3F), c); /* 0x80 = 10000000 */
+    }
+    else if (u >= 0x0800 && u <= 0xFFFF) {
+        OutputByte(0xE0 | ((u >> 12) & 0xFF), c); /* 0xE0 = 11100000 */
+        OutputByte(0x80 | ((u >> 6) & 0x3F), c); /* 0x80 = 10000000 */
+        OutputByte(0x80 | (u & 0x3F), c); /* 0x3F = 00111111 */
+    }
+    else if (u >= 0x10000 && u <= 0x10FFFF) {
+        OutputByte(0xF0 | ((u >> 18) & 0xFF), c); /* 0xF0 = 11110000 */
+        OutputByte(0x80 | ((u >> 12) & 0x3F), c); /* 0x80 = 10000000 */
+        OutputByte(0x80 | ((u >> 6) & 0x3F), c); /* 0x3F = 00111111 */
+        OutputByte(0x80 | (u & 0x3F), c);
+    }
 }
 
 #define STRING_ERROR(ret) do { c->top = head; return ret; } while(0)
@@ -129,7 +168,16 @@ static int lept_parse_string(lept_context* c, lept_value* v) {
                         if (!(p = lept_parse_hex4(p, &u)))
                             STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_HEX);
                         /* \TODO surrogate handling */
-                        lept_encode_utf8(c, u);
+                        unsigned H = 0, L = 0, codepoint = 0;
+                        if (u >= 0xD800 && u <= 0xDBFF) {
+                            H = u;
+                            p+=2;
+                            p = lept_parse_hex4(p, &u);
+                            L = u;
+                            codepoint = 0x10000 + (H - 0xD800) * 0x400 + (L - 0xDC00);
+                        }
+                        if (codepoint != 0)lept_encode_utf8(c, codepoint);
+                        else lept_encode_utf8(c, u);
                         break;
                     default:
                         STRING_ERROR(LEPT_PARSE_INVALID_STRING_ESCAPE);
