@@ -171,9 +171,15 @@ static int lept_parse_string(lept_context* c, lept_value* v) {
                         unsigned H = 0, L = 0, codepoint = 0;
                         if (u >= 0xD800 && u <= 0xDBFF) {
                             H = u;
+                            if (*p != '\\' || *(p + 1) != 'u') {
+                                return LEPT_PARSE_INVALID_UNICODE_SURROGATE;
+                            }
                             p+=2;
                             p = lept_parse_hex4(p, &u);
                             L = u;
+                            if (L < 0xDC00 || L>0xDFFF) {
+                                return LEPT_PARSE_INVALID_UNICODE_SURROGATE;
+                            }
                             codepoint = 0x10000 + (H - 0xD800) * 0x400 + (L - 0xDC00);
                         }
                         if (codepoint != 0)lept_encode_utf8(c, codepoint);
